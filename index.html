@@ -182,7 +182,7 @@ Father in law of Husain Shk Shabbir Gulzar</textarea>
       ctx.beginPath(); ctx.moveTo(x,y-9); ctx.lineTo(x+9,y); ctx.lineTo(x,y+9); ctx.lineTo(x-9,y); ctx.closePath(); ctx.fill();
     });
   }
-  function divider(y){
+  function divider(y, flip){
     const cx = W/2;
     const lg = (x0,x1)=>{ const g = ctx.createLinearGradient(x0,0,x1,0); g.addColorStop(0,"rgba(176,137,58,0)"); g.addColorStop(1,"rgba(176,137,58,1)"); return g; };
     ctx.lineWidth = 2;
@@ -190,10 +190,13 @@ Father in law of Husain Shk Shabbir Gulzar</textarea>
     ctx.strokeStyle = lg(cx+330, cx+40); ctx.beginPath(); ctx.moveTo(cx+40,y); ctx.lineTo(cx+330,y); ctx.stroke();
     // three-leaf motif
     ctx.fillStyle = "#a97b26";
+    ctx.save();
+    if (flip) { ctx.translate(0, 2*y); ctx.scale(1, -1); }   // mirror the motif so it points toward the title
     const leaf = (ang)=>{ ctx.save(); ctx.translate(cx, y+6); ctx.rotate(ang);
       ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(9,-12,0,-26); ctx.quadraticCurveTo(-9,-12,0,0); ctx.fill(); ctx.restore(); };
     leaf(0); leaf(-0.95); leaf(0.95);
     ctx.beginPath(); ctx.arc(cx, y+11, 3.5, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
   }
 
   function layout(v, s){
@@ -232,17 +235,48 @@ Father in law of Husain Shk Shabbir Gulzar</textarea>
     const ornBottom = 70 + 281*k;
     const placeBase = ornBottom + 42 + 30;
     spaced(PLACE, W/2, placeBase, 3);
-    let y = placeBase + 76 + 46;
+    let y = placeBase + 46;
 
-    // Title
-    const title = (v.title || "").toUpperCase();
-    let tSize = 72;
-    ctx.font = `700 ${tSize}px "EB Garamond", Georgia, serif`;
-    while (tSize > 44 && ctx.measureText(title).width + title.length*4 > 760){ tSize -= 2; ctx.font = `700 ${tSize}px "EB Garamond", Georgia, serif`; }
-    ctx.fillStyle = goldFill(y - tSize, y);
-    spaced(title, W/2, y, 4);
+    // Title — fixed size; long titles wrap onto a second line instead of shrinking
+    const title = (v.title || "").toUpperCase().replace(/\s+/g," ").trim();
+    const T_SIZE = 72, T_SPACE = 4, T_MAX = 880, T_LH = 86;
+    const tFont = s => `700 ${s}px "EB Garamond", Georgia, serif`;
+    const tWidth = str => { ctx.font = tFont(tSize); return ctx.measureText(str).width + Math.max(0,[...str].length-1)*T_SPACE; };
+    let tSize = T_SIZE;
+    let tLines = splitTitle(title);
+    function splitTitle(str){
+      if (!str) return [];
+      if (tWidth(str) <= T_MAX) return [str];
+      const words = str.split(" ");
+      // try a balanced two-line split first
+      let best = null;
+      for (let i = 1; i < words.length; i++){
+        const a = words.slice(0,i).join(" "), b = words.slice(i).join(" ");
+        const w = Math.max(tWidth(a), tWidth(b));
+        if (w <= T_MAX && (!best || w < best.w)) best = {w, lines:[a,b]};
+      }
+      if (best) return best.lines;
+      // otherwise wrap greedily over as many lines as needed
+      const lines = []; let cur = "";
+      words.forEach(w => { const t2 = cur ? cur + " " + w : w; if (tWidth(t2) <= T_MAX || !cur) cur = t2; else { lines.push(cur); cur = w; } });
+      if (cur) lines.push(cur);
+      return lines;
+    }
+    // keep very long titles to two lines by easing the size a little; never below 58px
+    while (tSize > 58 && (tLines.length > 2 || tLines.some(l => tWidth(l) > T_MAX))) { tSize -= 2; tLines = splitTitle(title); }
+    if (tLines.length > 2 || tLines.some(l => tWidth(l) > T_MAX)) { tSize = T_SIZE; tLines = splitTitle(title); }
+    while (tSize > 48 && tLines.some(l => tWidth(l) > T_MAX)) { tSize -= 2; tLines = splitTitle(title); }
+
+    divider(y, true);          // line above the title
+    y += 92;
+    tLines.forEach((line, i) => {
+      if (i) y += T_LH * tSize / T_SIZE;
+      ctx.font = tFont(tSize);
+      ctx.fillStyle = goldFill(y - tSize*0.7, y);
+      spaced(line, W/2, y, T_SPACE);
+    });
     y += 54;
-    divider(y);
+    divider(y, false);         // line below the title
     y += 70;
 
     // Body text, auto-shrinks to fit
